@@ -14,11 +14,17 @@ var (
 )
 
 type workerArray interface {
+	//worker 数量；
 	len() int
+	//worker 数量是否为 0；
 	isEmpty() bool
+	//goroutine 任务执行结束后，将相应的 worker 放回workerArray中；
 	insert(worker *goWorker) error
+	//从workerArray中取出一个 worker；
 	detach() *goWorker
+	//取出所有的过期 worker；
 	retrieveExpiry(duration time.Duration) []*goWorker
+	//重置容器。
 	reset()
 }
 

@@ -2,6 +2,7 @@ package ants
 
 import "time"
 
+//循环队列
 type loopQueue struct {
 	items  []*goWorker
 	expiry []*goWorker
@@ -41,20 +42,24 @@ func (wq *loopQueue) isEmpty() bool {
 	return wq.head == wq.tail && !wq.isFull
 }
 
+//goroutine完成任务后,会将对应的worker对象放回loopQueue
 func (wq *loopQueue) insert(worker *goWorker) error {
+	//队列为空
 	if wq.size == 0 {
 		return errQueueIsReleased
 	}
-
+	//队列满
 	if wq.isFull {
 		return errQueueIsFull
 	}
+
 	wq.items[wq.tail] = worker
 	wq.tail++
-
+	//循环队列,所以这边指向开始处
 	if wq.tail == wq.size {
 		wq.tail = 0
 	}
+	//俩个相等的时候说明队列满了
 	if wq.tail == wq.head {
 		wq.isFull = true
 	}
@@ -62,6 +67,7 @@ func (wq *loopQueue) insert(worker *goWorker) error {
 	return nil
 }
 
+//新任务到来调用loopQueeue.detach()方法获取一个空闲的 worker 结构
 func (wq *loopQueue) detach() *goWorker {
 	if wq.isEmpty() {
 		return nil
@@ -73,6 +79,7 @@ func (wq *loopQueue) detach() *goWorker {
 	if wq.head == wq.size {
 		wq.head = 0
 	}
+	//每次出队后，队列肯定不满了，isFull要重置为false
 	wq.isFull = false
 
 	return w

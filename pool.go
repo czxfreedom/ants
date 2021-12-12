@@ -35,27 +35,35 @@ type Pool struct {
 	// capacity of the pool, a negative value means that the capacity of pool is limitless, an infinite pool is used to
 	// avoid potential issue of endless blocking caused by nested usage of a pool: submitting a task to pool
 	// which submits a new task to the same pool.
+	//池容量，表示ants最多能创建的 goroutine 数量。如果为负数，表示容量无限制；
 	capacity int32
 
 	// running is the number of the currently running goroutines.
+	//已经创建的 worker goroutine 的数量；
 	running int32
 
 	// lock for protecting the worker queue.
+	//锁。ants自己实现了一个自旋锁。用于同步并发操作
 	lock sync.Locker
 
 	// workers is a slice that store the available workers.
+	//存放一组 worker 对象，workerArray只是一个接口，表示一个 worker 容器
 	workers workerArray
 
 	// state is used to notice the pool to closed itself.
+	//记录池子当前的状态，是否已关闭（CLOSED）；
 	state int32
 
 	// cond for waiting to get an idle worker.
+	//条件变量。处理任务等待和唤醒；
 	cond *sync.Cond
 
 	// workerCache speeds up the obtainment of a usable worker in function:retrieveWorker.
+	//使用sync.Pool对象池管理和创建worker对象，提升性能；
 	workerCache sync.Pool
 
 	// blockingNum is the number of the goroutines already been blocked on pool.Submit, protected by pool.lock
+	//阻塞等待的任务数量；
 	blockingNum int
 
 	options *Options
@@ -95,6 +103,7 @@ func (p *Pool) purgePeriodically() {
 
 // NewPool generates an instance of ants pool.
 func NewPool(size int, options ...Option) (*Pool, error) {
+	//配置解析
 	opts := loadOptions(options...)
 
 	if size <= 0 {
@@ -110,23 +119,25 @@ func NewPool(size int, options ...Option) (*Pool, error) {
 	if opts.Logger == nil {
 		opts.Logger = defaultLogger
 	}
-
+	//初始化池对象
 	p := &Pool{
 		capacity: int32(size),
 		lock:     internal.NewSpinLock(),
 		options:  opts,
 	}
+	//对象池中没有对象,那么会调用New函数创建
 	p.workerCache.New = func() interface{} {
 		return &goWorker{
 			pool: p,
 			task: make(chan func(), workerChanCap),
 		}
 	}
+	//如果设置了预分配选项，就采用loopQueue结构。否则就采用stack的结构
 	if p.options.PreAlloc {
 		if size == -1 {
 			return nil, ErrInvalidPreAllocSize
 		}
-		p.workers = newWorkerArray(loopQueueType, size)
+		p.workers = newWorkerArray(loopQueueType, size) //初始化pool中的workers对象
 	} else {
 		p.workers = newWorkerArray(stackType, 0)
 	}
@@ -134,6 +145,7 @@ func NewPool(size int, options ...Option) (*Pool, error) {
 	p.cond = sync.NewCond(p.lock)
 
 	// Start a goroutine to clean up expired workers periodically.
+	//开启定时任务
 	go p.purgePeriodically()
 
 	return p, nil
@@ -160,6 +172,7 @@ func (p *Pool) Submit(task func()) error {
 }
 
 // Running returns the amount of the currently running goroutines.
+//返回当前运行的goroutine数量
 func (p *Pool) Running() int {
 	return int(atomic.LoadInt32(&p.running))
 }
@@ -212,16 +225,19 @@ func (p *Pool) Reboot() {
 // ---------------------------------------------------------------------------
 
 // incRunning increases the number of the currently running goroutines.
+//running数增1
 func (p *Pool) incRunning() {
 	atomic.AddInt32(&p.running, 1)
 }
 
+//running减1
 // decRunning decreases the number of the currently running goroutines.
 func (p *Pool) decRunning() {
 	atomic.AddInt32(&p.running, -1)
 }
 
 // retrieveWorker returns an available worker to run the tasks.
+//返回一个可用的worker去运行tasks
 func (p *Pool) retrieveWorker() (w *goWorker) {
 	spawnWorker := func() {
 		w = p.workerCache.Get().(*goWorker)
@@ -236,18 +252,22 @@ func (p *Pool) retrieveWorker() (w *goWorker) {
 	} else if capacity := p.Cap(); capacity == -1 || capacity > p.Running() {
 		// if the worker queue is empty and we don't run out of the pool capacity,
 		// then just spawn a new worker goroutine.
+		//池容量还没用完(即容量大于正在工作的goWorker数量），则调用spawnWorker()新建一个goWorker
 		p.lock.Unlock()
 		spawnWorker()
 	} else { // otherwise, we'll have to keep them blocked and wait for at least one worker to be put back into pool.
+		//如果设置了非阻塞选项，则直接返回
 		if p.options.Nonblocking {
 			p.lock.Unlock()
 			return
 		}
 	retry:
+		//如果设置了最大阻塞队列长度上限，且当前阻塞等待的任务数量已经达到这个上限，直接返回。
 		if p.options.MaxBlockingTasks != 0 && p.blockingNum >= p.options.MaxBlockingTasks {
 			p.lock.Unlock()
 			return
 		}
+		//阻塞等待数量 +1，调用p.cond.Wait()等待
 		p.blockingNum++
 		p.cond.Wait() // block and wait for an available worker
 		p.blockingNum--
@@ -274,10 +294,12 @@ func (p *Pool) retrieveWorker() (w *goWorker) {
 }
 
 // revertWorker puts a worker back into free pool, recycling the goroutines.
+//将一个worker放入池中
 func (p *Pool) revertWorker(worker *goWorker) bool {
 	if capacity := p.Cap(); (capacity > 0 && p.Running() > capacity) || p.IsClosed() {
 		return false
 	}
+	//重新设置循环时间
 	worker.recycleTime = time.Now()
 	p.lock.Lock()
 
@@ -287,7 +309,7 @@ func (p *Pool) revertWorker(worker *goWorker) bool {
 		p.lock.Unlock()
 		return false
 	}
-
+	//新增一个worker
 	err := p.workers.insert(worker)
 	if err != nil {
 		p.lock.Unlock()
@@ -295,6 +317,7 @@ func (p *Pool) revertWorker(worker *goWorker) bool {
 	}
 
 	// Notify the invoker stuck in 'retrieveWorker()' of there is an available worker in the worker queue.
+	//通知卡在 'retrieveWorker()' 中的调用者在工作队列中有一个可用的工作人员。
 	p.cond.Signal()
 	p.lock.Unlock()
 	return true

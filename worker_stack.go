@@ -3,7 +3,9 @@ package ants
 import "time"
 
 type workerStack struct {
-	items  []*goWorker
+	//空闲的worker；
+	items []*goWorker
+	//过期的worker
 	expiry []*goWorker
 	size   int
 }

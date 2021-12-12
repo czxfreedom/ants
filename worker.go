@@ -32,11 +32,14 @@ import (
 // performs function calls.
 type goWorker struct {
 	// pool who owns this worker.
+	//持有 goroutine 池的引用
 	pool *Pool
 
 	// task is a job should be done.
+	//任务通道，通过这个通道将类型为func ()的函数作为任务发送给goWorker；
 	task chan func()
-
+	//这个字段记录goWorker什么时候被放回池中（即什么时候开始空闲）。
+	//其完成任务后，在将其放回 goroutine 池的时候设置。
 	// recycleTime will be updated when putting a worker back into queue.
 	recycleTime time.Time
 }
@@ -67,7 +70,9 @@ func (w *goWorker) run() {
 			if f == nil {
 				return
 			}
+			//
 			f()
+			//将该goWorker对象放回池中
 			if ok := w.pool.revertWorker(w); !ok {
 				return
 			}
