@@ -166,14 +166,21 @@ func NewPool(size int, options ...Option) (*Pool, error) {
 // but what calls for special attention is that you will get blocked with the latest
 // Pool.Submit() call once the current Pool runs out of its capacity, and to avoid this,
 // you should instantiate a Pool with ants.WithNonblocking(true).
+//提交将任务提交到此池。
+//请注意，您可以调用池。从当前池提交（）。提交（），
+//但需要特别注意的是，你会被最新的消息所阻止
+//游泳池。在当前池的容量用完时调用Submit（），为了避免这种情况，
+//您应该用ants实例化一个池。WithNonblocking（真）。
 func (p *Pool) Submit(task func()) error {
 	if p.IsClosed() {
 		return ErrPoolClosed
 	}
 	var w *goWorker
+	//获取一个worker, 这个worker会开启一个协程 阻塞接受task,然后执行
 	if w = p.retrieveWorker(); w == nil {
 		return ErrPoolOverload
 	}
+	//往worker里面放task
 	w.task <- task
 	return nil
 }
@@ -185,6 +192,7 @@ func (p *Pool) Running() int {
 }
 
 // Free returns the amount of available goroutines to work, -1 indicates this pool is unlimited.
+//Free返回可用goroutine的工作数量，-1表示此池是无限的。
 func (p *Pool) Free() int {
 	c := p.Cap()
 	if c < 0 {

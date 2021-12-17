@@ -23,7 +23,6 @@ func (wq *loopQueue) len() int {
 	if wq.size == 0 {
 		return 0
 	}
-
 	if wq.head == wq.tail {
 		if wq.isFull {
 			return wq.size
