@@ -63,6 +63,7 @@ func (w *goWorker) run() {
 				}
 			}
 			// Call Signal() here in case there are goroutines waiting for available workers.
+			//在这里调用Signal（），以防有goroutine等待可用的工作进程。
 			w.pool.cond.Signal()
 		}()
 
@@ -70,7 +71,7 @@ func (w *goWorker) run() {
 			if f == nil {
 				return
 			}
-			//
+			//执行任务
 			f()
 			//将该goWorker对象放回池中
 			if ok := w.pool.revertWorker(w); !ok {

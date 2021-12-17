@@ -30,6 +30,7 @@ func (wq *workerStack) insert(worker *goWorker) error {
 	return nil
 }
 
+//从容器中取出一个空闲的 worker
 func (wq *workerStack) detach() *goWorker {
 	l := wq.len()
 	if l == 0 {
@@ -37,7 +38,7 @@ func (wq *workerStack) detach() *goWorker {
 	}
 
 	w := wq.items[l-1]
-	wq.items[l-1] = nil // avoid memory leaks
+	wq.items[l-1] = nil // avoid memory leaks 避免内存泄漏
 	wq.items = wq.items[:l-1]
 
 	return w
@@ -64,6 +65,7 @@ func (wq *workerStack) retrieveExpiry(duration time.Duration) []*goWorker {
 	return wq.expiry
 }
 
+//二分查找
 func (wq *workerStack) binarySearch(l, r int, expiryTime time.Time) int {
 	var mid int
 	for l <= r {
@@ -77,6 +79,7 @@ func (wq *workerStack) binarySearch(l, r int, expiryTime time.Time) int {
 	return r
 }
 
+//重置
 func (wq *workerStack) reset() {
 	for i := 0; i < wq.len(); i++ {
 		wq.items[i].task <- nil

@@ -87,6 +87,10 @@ func (p *Pool) purgePeriodically() {
 		// This notification must be outside the p.lock, since w.task
 		// may be blocking and may consume a lot of time if many workers
 		// are located on non-local CPUs.
+		//通知过时的工人停止工作。
+		//此通知必须在p.lock之外，因为w.task
+		//如果有很多工人，可能会堵塞，并且可能会消耗大量时间
+		//位于非本地CPU上。
 		for i := range expiredWorkers {
 			expiredWorkers[i].task <- nil
 			expiredWorkers[i] = nil
@@ -95,6 +99,9 @@ func (p *Pool) purgePeriodically() {
 		// There might be a situation that all workers have been cleaned up(no any worker is running)
 		// while some invokers still get stuck in "p.cond.Wait()",
 		// then it ought to wake all those invokers.
+		//可能存在所有工人都已清理干净的情况（没有任何工人在运行）
+		//虽然一些调用程序仍然停留在“p.cond.Wait（）”中，
+		//那么它应该唤醒所有的调用者。
 		if p.Running() == 0 {
 			p.cond.Broadcast()
 		}
